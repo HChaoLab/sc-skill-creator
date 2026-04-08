@@ -1,0 +1,78 @@
+# Leiden clustering — community detection on kNN graph
+skill_id: scanpy_leiden
+language: python
+package: scanpy
+
+required_inputs:
+  - input_data
+  - params_dict
+
+default_params:
+  resolution: 1.0    # float  ↑→more clusters  ↓→fewer clusters
+  n_neighbors: 15    # int    ↑→smoother graph  ↓→finer structure
+  random_state: 42
+  key_added: leiden
+
+output_objects:
+  - updated_adata
+
+accepted_input_types:
+  - AnnData
+  - h5ad
+
+output_format: same
+
+metrics_to_extract:
+  - n_clusters
+  - min_cluster_size
+  - max_cluster_size
+  - mean_cluster_size
+
+context_params:
+  - protocol
+
+success_thresholds: "n_clusters >= t['min_clusters'] and n_clusters <= t['max_clusters'] and min_cluster_size >= t['min_cluster_size']"
+
+error_handling:
+  MemoryError: "Reduce n_neighbors or n_pcs"
+  "KeyError: neighbors": "Run sc.pp.neighbors() before sc.tl.leiden()"
+
+cognitive_layer:
+  purpose: >
+    Leiden clustering partitions single cells into groups based on transcriptional
+    similarity using community detection on a k-nearest neighbor graph.
+    Identifies cell populations (cell types, states, subtypes) without prior labels.
+    Resolution controls granularity: low resolution finds broad cell types,
+    high resolution reveals subtypes and transitional states.
+  parameter_impact:
+    resolution: "Controls cluster granularity. Higher values produce more, smaller clusters. Too few suggests over-aggregation; too many suggests noise is split as structure."
+    n_neighbors: "Determines k in kNN graph. More neighbors smooth transitions between populations. Fewer neighbors preserve local structure but may fragment clusters."
+
+parameter_science_guide:
+  resolution:
+    too_few_clusters:
+      adjust: increase
+      delta: 0.3
+      causal_chain: "Higher resolution lowers modularity threshold, allowing more communities to form"
+      expected_effect: "More clusters, smaller sizes"
+    too_many_clusters:
+      adjust: decrease
+      delta: 0.3
+      causal_chain: "Lower resolution raises modularity threshold, causing similar cells to merge"
+      expected_effect: "Fewer clusters, larger sizes"
+    small_clusters:
+      adjust: decrease
+      delta: 0.2
+      causal_chain: "Lower resolution merges small clusters with their nearest neighbors"
+      expected_effect: "Small clusters absorbed into adjacent populations"
+  n_neighbors:
+    noisy_fragmented:
+      adjust: increase
+      delta: 7
+      causal_chain: "More neighbors smooth the kNN graph by averaging over more cells"
+      expected_effect: "Smoother clusters, fewer spurious small groups"
+    merged_undifferentiated:
+      adjust: decrease
+      delta: 5
+      causal_chain: "Fewer neighbors sharpen neighborhood boundaries, revealing finer structure"
+      expected_effect: "More distinct clusters"

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.env
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+
+# Data files (usually too large for git)
+*.h5ad
+*.rds
+*.loom
+*.h5
+
+# OS
+.DS_Store
+Thumbs.db
