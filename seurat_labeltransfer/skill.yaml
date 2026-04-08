@@ -1,0 +1,83 @@
+# Seurat Label Transfer — Transfer cell type labels from reference to query
+skill_id: seurat_labeltransfer
+language: R
+package: seurat
+
+required_inputs:
+  - input_data
+  - params_list
+
+default_params:
+  reference_path: null          # str (required)  path to reference RDS Seurat object
+  ref_label_col: cell_type      # str  column in reference@meta.data containing labels
+  dims: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]
+  normalization_method: LogNormalize  # str  'LogNormalize' | 'SCT'
+  k_filter: 200                 # int  max anchors per query cell
+  k_score: 30                   # int  neighbors for anchor scoring
+  k_weight: 100                 # int  neighbors for label transfer weighting
+  prediction_col: predicted_celltype  # str  output column name in query@meta.data
+
+output_objects:
+  - seurat_obj
+
+accepted_input_types:
+  - Seurat
+  - rds
+
+output_format: same
+
+metrics_to_extract:
+  - n_predicted_types
+  - pct_high_confidence
+  - mean_prediction_score
+  - top3_predicted
+
+context_params:
+  - protocol
+
+success_thresholds: "mean_prediction_score >= t['min_pred_score'] and pct_high_confidence >= t['min_high_conf']"
+
+error_handling:
+  "Error in FindTransferAnchors: reference not found": "Ensure reference_path points to a valid Seurat RDS file"
+  "Error: normalization_method mismatch": "Query and reference must use the same normalization_method"
+  "Error: no anchors found": "Check that query and reference share sufficient common variable features"
+
+cognitive_layer:
+  purpose: >
+    Seurat label transfer projects cell type annotations from an annotated reference
+    dataset onto an unannotated query dataset. FindTransferAnchors identifies pairs
+    of cells (anchors) across datasets that represent the same biological state,
+    using CCA or RPCA to find a shared embedding space. TransferData then uses
+    these anchors to weight-transfer labels and gene expression from reference to
+    query. This approach is particularly powerful when a high-quality atlas is
+    available for the same tissue — it propagates rich, manually curated annotations
+    without requiring re-annotation.
+  parameter_impact:
+    dims: "CCA/RPCA dimensions used for anchor finding. More dims capture more variation but may include noise. Match the dims used in the reference analysis."
+    k_filter: "Maximum anchors per cell. Larger values include more anchors but with lower confidence."
+    k_score: "Neighbors for anchor scoring. Larger values give smoother, more robust anchor scores."
+    normalization_method: "Must match how both reference and query were normalized. Use 'SCT' if both used SCTransform."
+
+parameter_science_guide:
+  dims:
+    low_prediction_score:
+      adjust: increase
+      delta: 10
+      causal_chain: "More CCA dims capture additional shared variation between datasets, improving anchor quality"
+      expected_effect: "Better anchor finding; higher prediction scores"
+    noisy_transfer:
+      adjust: decrease
+      delta: 5
+      causal_chain: "Fewer dims reduce noise contribution to the shared embedding"
+      expected_effect: "Cleaner anchors; more confident label transfer"
+  k_weight:
+    fragmented_predictions:
+      adjust: increase
+      delta: 20
+      causal_chain: "More neighbors for weighting smooths the prediction landscape"
+      expected_effect: "More homogeneous predictions within clusters"
+    over_smoothed:
+      adjust: decrease
+      delta: 20
+      causal_chain: "Fewer neighbors makes transfer more local, preserving fine-grained distinctions"
+      expected_effect: "More varied predictions; subtypes may be resolved"

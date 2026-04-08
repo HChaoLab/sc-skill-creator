@@ -1,0 +1,82 @@
+# SingleR classifyCells — Reference-based automated cell type annotation
+skill_id: singler_classifycells
+language: R
+package: SingleR
+
+required_inputs:
+  - input_data
+  - params_list
+
+default_params:
+  ref: HumanPrimaryCellAtlasData   # str  reference dataset function name from celldex, or a SummarizedExperiment
+  labels_field: label.main          # str  'label.main' (broad) | 'label.fine' (detailed) | 'label.ont' (ontology)
+  assay_type: logcounts             # str  assay to use from query SCE; 'logcounts' | 'counts'
+  de_method: classic                # str  'classic' (Wilcoxon) | 'wilcox' | 't'
+  aggr_ref: false                   # bool  aggregate reference samples per label; speeds up, slight accuracy loss
+  prune: true                       # bool  prune ambiguous assignments using adaptive thresholds
+
+output_objects:
+  - sce_obj
+
+accepted_input_types:
+  - SingleCellExperiment
+  - Seurat
+  - rds
+
+output_format: same
+
+metrics_to_extract:
+  - n_cell_types
+  - pct_pruned
+  - mean_delta_next
+  - top3_celltypes
+
+context_params:
+  - protocol
+  - species
+
+success_thresholds: "pct_pruned <= t['max_pct_pruned'] and mean_delta_next >= t['min_delta_next']"
+
+error_handling:
+  "Error in SingleR: no common genes": "Ensure query and reference use matching gene symbols (human vs mouse)"
+  "Error: assay not found": "Set assay_type='logcounts' or run logNormCounts() on the SCE first"
+  "celldex not installed": "BiocManager::install('celldex') to access reference datasets"
+
+cognitive_layer:
+  purpose: >
+    SingleR performs reference-based cell type annotation by correlating each cell's
+    expression profile against curated reference datasets (via celldex). It computes
+    Spearman correlations between query cells and reference samples for each label,
+    then iteratively prunes genes and labels to identify the best match. The 'delta'
+    score (difference between top and next-best label score) quantifies confidence —
+    low delta indicates ambiguity between closely related cell types. SingleR is the
+    gold-standard automated annotation method for well-characterized cell types.
+  parameter_impact:
+    ref: "Reference dataset determines what cell types can be detected. 'HumanPrimaryCellAtlasData' is broad; 'BlueprintEncodeData' is better for immune; 'ImmGenData' for mouse immune cells."
+    labels_field: "'label.main' gives coarse major cell types; 'label.fine' gives detailed subtypes; use 'label.main' for initial annotation."
+    prune: "When True, low-confidence assignments (low delta score) are set to NA rather than forcing a label."
+    aggr_ref: "Aggregating reference pseudo-bulks speeds up computation ~10x with minimal accuracy loss for large datasets."
+
+parameter_science_guide:
+  labels_field:
+    too_few_cell_types:
+      adjust: increase
+      delta: 0
+      causal_chain: "Switching from 'label.main' to 'label.fine' resolves broad categories into detailed subtypes"
+      expected_effect: "More granular cell type assignments; subtypes distinguished"
+    too_many_pruned:
+      adjust: increase
+      delta: 0
+      causal_chain: "Switching to 'label.main' uses fewer, broader reference categories reducing ambiguity"
+      expected_effect: "Fewer pruned/NA cells; more confident broad assignments"
+  prune:
+    high_na_rate:
+      adjust: decrease
+      delta: 0
+      causal_chain: "Setting prune=FALSE forces a best-guess label even for ambiguous cells"
+      expected_effect: "No NA labels; all cells receive the top-scoring label regardless of confidence"
+    low_confidence_labels:
+      adjust: increase
+      delta: 0
+      causal_chain: "Enabling pruning removes low delta-score assignments, leaving only confident labels"
+      expected_effect: "Some cells become NA/pruned but remaining labels are high-confidence"

@@ -1,0 +1,81 @@
+# CellTypist annotate — Automated cell type annotation using pre-trained models
+skill_id: celltypist_annotate
+language: python
+package: celltypist
+
+required_inputs:
+  - input_data
+  - params_dict
+
+default_params:
+  model: Immune_All_Low.pkl    # str  pre-trained model name or path; see celltypist.models.models_description()
+  majority_voting: true        # bool  refine predictions using neighborhood majority voting
+  over_clustering: null        # str or null  adata.obs column for over-clustering; null = auto-run leiden
+  min_prop: 0.0                # float  min fraction for majority_voting; cells below are labeled 'Unassigned'
+  p_thres: 0.5                 # float  probability threshold; predictions below are 'Unassigned'
+
+output_objects:
+  - updated_adata
+
+accepted_input_types:
+  - AnnData
+  - h5ad
+
+output_format: same
+
+metrics_to_extract:
+  - n_cell_types
+  - pct_unassigned
+  - mean_max_probability
+  - top3_celltypes
+
+context_params:
+  - protocol
+  - tissue
+
+success_thresholds: "pct_unassigned <= t['max_pct_unassigned'] and mean_max_probability >= t['min_mean_prob']"
+
+error_handling:
+  "Model not found": "Run celltypist.models.download_models() or check model name via celltypist.models.models_description()"
+  "adata.X should be log-normalized": "Run sc.pp.normalize_total() then sc.pp.log1p() before CellTypist"
+  "KeyError: predicted_labels": "Ensure majority_voting output is accessed via adata.obs['majority_voting'] not 'predicted_labels'"
+
+cognitive_layer:
+  purpose: >
+    CellTypist is a logistic regression-based automated cell type classifier
+    trained on curated reference atlases. It assigns probabilistic cell type
+    labels to each cell by comparing its gene expression profile against a
+    pre-trained model. The majority_voting mode refines per-cell predictions
+    using cluster-level consensus, improving accuracy for ambiguous cells at
+    cluster boundaries. CellTypist excels at immune cell annotation (with
+    Immune_All models) and provides hierarchical annotation at multiple
+    resolution levels (Low = major types, High = subtypes).
+  parameter_impact:
+    model: "Determines the reference atlas. 'Immune_All_Low.pkl' for major immune types; 'Immune_All_High.pkl' for detailed subtypes; tissue-specific models available."
+    majority_voting: "When True, overrides per-cell predictions with the majority label in each cluster. Increases consistency but may mask rare cells."
+    p_thres: "Probability threshold for confident assignment. Lower threshold → more cells labeled but more errors; higher → more 'Unassigned' but higher confidence."
+    min_prop: "Minimum fraction required for majority voting. Higher value → stricter consensus; more 'Unassigned' in heterogeneous clusters."
+
+parameter_science_guide:
+  p_thres:
+    high_unassigned:
+      adjust: decrease
+      delta: 0.1
+      causal_chain: "Lower probability threshold allows cells with moderate model confidence to receive a label"
+      expected_effect: "Fewer 'Unassigned' cells; more cells annotated with best-matching type"
+    low_confidence_labels:
+      adjust: increase
+      delta: 0.1
+      causal_chain: "Higher threshold requires stronger model confidence before assigning a label"
+      expected_effect: "More 'Unassigned' cells but higher-confidence annotations"
+  min_prop:
+    fragmented_voting:
+      adjust: decrease
+      delta: 0.05
+      causal_chain: "Lower min_prop allows minority-type clusters to retain their predicted label even when mixed"
+      expected_effect: "Fewer 'Unassigned' clusters; mixed clusters retain dominant type label"
+    over_homogenized:
+      adjust: increase
+      delta: 0.05
+      causal_chain: "Higher min_prop requires stronger consensus before assigning a cluster label"
+      expected_effect: "More cells marked 'Unassigned' in heterogeneous clusters"

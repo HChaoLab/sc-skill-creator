@@ -1,0 +1,77 @@
+# ScType score — Marker gene scoring for automatic cell type identification
+skill_id: sctype_score
+language: R
+package: sctype
+
+required_inputs:
+  - input_data
+  - params_list
+
+default_params:
+  tissue_type: Immune system       # str  tissue for built-in marker DB; see sctype_db options
+  db_path: null                    # str or null  path to custom marker DB xlsx; null = use built-in
+  scaled_assay: scale.data         # str  scaled assay slot: 'scale.data' (Seurat) or 'SCT'
+  cluster_col: seurat_clusters     # str  adata.obs / meta.data column with cluster labels
+  score_col: sctype_classification  # str  output column name for cell type assignments
+  top_cell_types: 1                # int  number of top predictions to consider per cluster
+
+output_objects:
+  - seurat_obj
+
+accepted_input_types:
+  - Seurat
+  - rds
+
+output_format: same
+
+metrics_to_extract:
+  - n_assigned_types
+  - pct_unknown
+  - mean_top_score
+  - top3_types
+
+context_params:
+  - protocol
+  - tissue_type
+
+success_thresholds: "pct_unknown <= t['max_pct_unknown'] and mean_top_score >= t['min_score']"
+
+error_handling:
+  "Error in ScType: scaled data not found": "Run ScaleData() (or SCTransform) before sctype_score"
+  "Error: tissue not found": "Check tissue_type against available options or provide custom db_path"
+  "HiClimR not installed": "install.packages('HiClimR') — required dependency for sctype"
+
+cognitive_layer:
+  purpose: >
+    ScType performs fully automated cell type identification using marker gene
+    enrichment scoring. For each cluster, it computes a ScType score by summing
+    the scaled expression of positive marker genes and subtracting the expression
+    of negative markers, normalizing by cluster size. The cluster is assigned the
+    cell type with the highest positive ScType score. Unlike reference-based methods
+    (SingleR, CellTypist), ScType relies on expert-curated marker gene lists,
+    making it interpretable and easily customizable. It supports both built-in
+    tissue-specific databases and user-provided marker lists in XLSX format.
+  parameter_impact:
+    tissue_type: "Selects the built-in marker database subset. Wrong tissue leads to low scores and incorrect assignments."
+    db_path: "Path to custom XLSX marker database. Each row = one cell type with positive/negative marker columns."
+    scaled_assay: "ScType requires scaled expression. Use 'scale.data' for standard Seurat; 'SCT' for SCTransform."
+    cluster_col: "Cluster column used for aggregation. Must match the leiden/louvain/seurat_clusters column."
+
+parameter_science_guide:
+  tissue_type:
+    low_scores:
+      adjust: increase
+      delta: 0
+      causal_chain: "Selecting a more specific tissue-type database includes markers relevant to the actual cell types present"
+      expected_effect: "Higher ScType scores; more accurate assignments"
+    high_unknown:
+      adjust: increase
+      delta: 0
+      causal_chain: "A broader or more appropriate tissue database covers more of the cell types present"
+      expected_effect: "Fewer 'Unknown' assignments; more clusters annotated"
+  scaled_assay:
+    low_scores:
+      adjust: increase
+      delta: 0
+      causal_chain: "Switching to the correct scaled assay slot ensures the expression matrix ScType reads is properly normalized"
+      expected_effect: "Higher marker enrichment scores; more reliable assignments"
