@@ -1,0 +1,76 @@
+# Seurat FindNeighbors — SNN graph construction for clustering and UMAP
+skill_id: seurat_findneighbors
+language: R
+package: seurat
+
+required_inputs:
+  - input_data
+  - params_list
+
+default_params:
+  dims: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]  # PCA dims to use
+  k.param: 20            # int  k for kNN; default 20
+  reduction: pca         # str  'pca' | 'harmony' | 'scvi' | 'integrated.dr'
+  prune.SNN: 0.0667      # float  Jaccard similarity threshold for SNN pruning
+  annoy.metric: euclidean  # str  distance metric for approximate nearest neighbor
+
+output_objects:
+  - seurat_obj
+
+accepted_input_types:
+  - Seurat
+  - rds
+
+output_format: same
+
+metrics_to_extract:
+  - n_dims_used
+  - k_param_used
+  - n_cells
+
+context_params:
+  - protocol
+
+success_thresholds: "n_dims_used >= t['min_dims']"
+
+error_handling:
+  "Error in FindNeighbors: reduction not found": "Run RunPCA() (or harmony/scVI integration) before FindNeighbors()"
+  "Error: dims larger than": "Reduce dims to match the number of PCs computed"
+
+cognitive_layer:
+  purpose: >
+    FindNeighbors constructs a Shared Nearest Neighbor (SNN) graph in the PCA
+    (or batch-corrected) embedding space. For each cell, it first identifies the
+    k nearest neighbors (kNN), then refines edges by computing Jaccard similarity
+    of neighborhoods (shared neighbors / union of neighbors). The SNN graph is the
+    direct input to FindClusters and RunUMAP — its quality determines the accuracy
+    of all downstream cell type assignments.
+  parameter_impact:
+    dims: "PCA dimensions used for distance calculation. Too few miss biological variation; too many include noise. Use ElbowPlot to choose the 'elbow' point."
+    k.param: "Number of nearest neighbors. Larger k smooths the graph (fewer noise-driven clusters); smaller k resolves finer population structure."
+    reduction: "Embedding to compute distances in. Use 'harmony' or 'scvi' after batch correction."
+    prune.SNN: "Jaccard similarity threshold below which edges are removed. Higher value = sparser, cleaner graph."
+
+parameter_science_guide:
+  dims:
+    missing_rare_populations:
+      adjust: increase
+      delta: 5
+      causal_chain: "Including more PCA dims captures variance from rare cell-type-specific gene programs"
+      expected_effect: "Rare populations may emerge as distinct clusters"
+    noisy_clusters:
+      adjust: decrease
+      delta: 5
+      causal_chain: "Fewer dims exclude noise-dominated PCA axes from the distance calculation"
+      expected_effect: "Cleaner graph; biologically meaningful clusters"
+  k.param:
+    fragmented_clusters:
+      adjust: increase
+      delta: 5
+      causal_chain: "More neighbors provide more shared neighbors per cell, stabilizing cluster assignments"
+      expected_effect: "Fewer singleton/tiny clusters; more cohesive populations"
+    over_merged_populations:
+      adjust: decrease
+      delta: 5
+      causal_chain: "Fewer neighbors sharpen local neighborhood boundaries between closely related populations"
+      expected_effect: "Subtypes resolved; more clusters with finer granularity"

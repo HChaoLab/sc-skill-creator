@@ -1,0 +1,80 @@
+# Highly Variable Gene selection — identify informative genes for downstream analysis
+skill_id: scanpy_hvg
+language: python
+package: scanpy
+
+required_inputs:
+  - input_data
+  - params_dict
+
+default_params:
+  n_top_genes: 2000      # int  number of HVGs to select
+  min_mean: 0.0125       # float  minimum mean expression to consider
+  max_mean: 3.0          # float  maximum mean expression (log scale)
+  min_disp: 0.5          # float  minimum dispersion (variation above trend)
+  flavor: seurat         # str  'seurat' | 'cell_ranger' | 'seurat_v3'
+  batch_key: null        # str or null  batch column in adata.obs for per-batch selection
+  subset: false          # bool  if True, subset adata to HVGs in-place
+
+output_objects:
+  - updated_adata
+
+accepted_input_types:
+  - AnnData
+  - h5ad
+
+output_format: same
+
+metrics_to_extract:
+  - n_hvg
+  - mean_dispersion_hvg
+  - pct_hvg
+
+context_params:
+  - protocol
+  - n_cells
+
+success_thresholds: "n_hvg >= t['min_hvg'] and n_hvg <= t['max_hvg']"
+
+error_handling:
+  "ValueError: could not convert": "Ensure adata has been log-normalized before calling highly_variable_genes with flavor='seurat'"
+  "KeyError: highly_variable": "Run sc.pp.highly_variable_genes() before subsetting"
+
+cognitive_layer:
+  purpose: >
+    Highly variable gene (HVG) selection identifies genes with greater cell-to-cell
+    variation than expected by chance — these genes carry the most biological signal
+    for distinguishing cell types and states. By restricting downstream analysis
+    (PCA, clustering) to HVGs, we reduce noise from housekeeping and lowly expressed
+    genes while dramatically reducing dimensionality.
+  parameter_impact:
+    n_top_genes: "Primary count of selected genes. More HVGs → richer signal but higher noise; fewer → cleaner PCA but may miss rare cell types."
+    min_disp: "Dispersion threshold. Raising it keeps only the most variable genes; lowering it admits moderately variable genes."
+    min_mean: "Lower expression threshold. Raising it excludes lowly expressed (noisy) genes from consideration."
+    max_mean: "Upper expression threshold. Lowering it excludes ubiquitously expressed (housekeeping) genes."
+    flavor: "Algorithm for computing dispersion. 'seurat_v3' is recommended for raw counts; 'seurat'/'cell_ranger' for log-normalized data."
+    batch_key: "When set, HVGs are selected per-batch and intersected, reducing batch-specific artifacts in selection."
+
+parameter_science_guide:
+  n_top_genes:
+    too_few_hvg:
+      adjust: increase
+      delta: 500
+      causal_chain: "Increasing n_top_genes expands the gene pool, retaining more low-variance but biologically relevant genes"
+      expected_effect: "More genes in PCA; may recover rare cell type markers"
+    too_many_hvg:
+      adjust: decrease
+      delta: 500
+      causal_chain: "Reducing n_top_genes sharpens focus on the most variable genes, removing noise-level variation"
+      expected_effect: "Cleaner PCA components; less noise in downstream clustering"
+  min_disp:
+    low_variance_dominated:
+      adjust: increase
+      delta: 0.1
+      causal_chain: "Higher dispersion threshold requires greater variation above the mean-variance trend"
+      expected_effect: "Fewer but more variable genes selected; noise reduction"
+    missing_rare_markers:
+      adjust: decrease
+      delta: 0.1
+      causal_chain: "Lower threshold admits genes with moderate variation, including sparse marker genes"
+      expected_effect: "More genes selected; rare cell type markers may be recovered"

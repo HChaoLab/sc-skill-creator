@@ -1,0 +1,78 @@
+# Seurat SCTransform — Regularized normalization and HVG selection
+skill_id: seurat_sctransform
+language: R
+package: seurat
+
+required_inputs:
+  - input_data
+  - params_list
+
+default_params:
+  variable.features.n: 3000    # int  number of variable features for PCA
+  vst.flavor: v2               # str  'v2' (recommended) or 'glmGamPoi'
+  vars.to.regress: null        # character vector or null  covariates to regress out
+  assay: RNA                   # str  assay to normalize
+  verbose: false               # bool  show progress
+
+output_objects:
+  - seurat_obj
+
+accepted_input_types:
+  - Seurat
+  - rds
+
+output_format: same
+
+metrics_to_extract:
+  - n_variable_features
+  - median_pearson_residual_var
+  - n_cells
+
+context_params:
+  - protocol
+  - regress_cell_cycle
+
+success_thresholds: "n_variable_features >= t['min_hvf']"
+
+error_handling:
+  "Error in SCTransform: glmGamPoi not installed": "Install glmGamPoi: BiocManager::install('glmGamPoi')"
+  "Error: assay not found": "Ensure the 'RNA' assay contains raw counts before SCTransform"
+  "Error: non-integer counts": "SCTransform requires raw integer counts in @assays$RNA@counts"
+
+cognitive_layer:
+  purpose: >
+    SCTransform applies regularized negative binomial regression to remove the
+    confounding effect of sequencing depth (library size) on gene expression.
+    Unlike the traditional NormalizeData → ScaleData pipeline, SCTransform
+    simultaneously normalizes, identifies highly variable features, and scales
+    data. The v2 flavor uses improved Pearson residuals that better preserve
+    biological variance while removing technical variation. It is the recommended
+    normalization approach for datasets with variable capture efficiency.
+  parameter_impact:
+    variable.features.n: "Number of variable features retained for PCA. More features → richer signal but slower PCA; fewer → cleaner but may miss rare markers."
+    vst.flavor: "'v2' uses improved Pearson residuals (recommended). 'glmGamPoi' is faster for large datasets."
+    vars.to.regress: "Covariates regressed out during normalization. Use 'percent.mt' to remove mitochondrial confounding; 'S.Score'/'G2M.Score' to remove cell cycle effects. Caution: regressing cell cycle may mask genuinely cycling populations."
+
+parameter_science_guide:
+  variable.features.n:
+    too_few_hvf:
+      adjust: increase
+      delta: 500
+      causal_chain: "More variable features capture broader biological variation including rare cell type markers"
+      expected_effect: "More features in PCA; rare populations may emerge"
+    noisy_features:
+      adjust: decrease
+      delta: 500
+      causal_chain: "Fewer variable features focus PCA on the most informative genes"
+      expected_effect: "Cleaner PCA; major cell types more distinct"
+  vars.to.regress:
+    cell_cycle_confounded:
+      adjust: increase
+      delta: 0
+      causal_chain: "Adding 'S.Score' and 'G2M.Score' to vars.to.regress removes cell cycle variation from the normalized data"
+      expected_effect: "Cell cycle-driven clusters merge; underlying cell type structure becomes visible"
+    mito_confounded:
+      adjust: increase
+      delta: 0
+      causal_chain: "Adding 'percent.mt' to vars.to.regress removes mitochondrial content variation"
+      expected_effect: "Dying/stressed cell clusters may merge with healthy counterparts"

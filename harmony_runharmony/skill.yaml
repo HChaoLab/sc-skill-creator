@@ -1,0 +1,87 @@
+# Harmony RunHarmony — Batch correction via iterative PCA alignment
+skill_id: harmony_runharmony
+language: R
+package: harmony
+
+required_inputs:
+  - input_data
+  - params_list
+
+default_params:
+  group.by.vars: orig.ident   # str or character vector  batch column(s) in metadata
+  theta: 2.0                   # float  diversity penalty; higher = more mixing
+  lambda: 1.0                  # float  ridge penalty; higher = more conservative
+  sigma: 0.1                   # float  soft-assignment kernel width
+  nclust: null                 # int or null  Harmony clusters; null = auto
+  max.iter.harmony: 10         # int  max convergence iterations
+  dims.use: null               # int vector or null  PCA dims to correct; null = all
+
+output_objects:
+  - seurat_obj
+
+accepted_input_types:
+  - Seurat
+  - rds
+
+output_format: same
+
+metrics_to_extract:
+  - n_harmony_clusters
+  - n_iter_converged
+  - batch_mixing_score
+
+context_params:
+  - protocol
+  - n_batches
+
+success_thresholds: "batch_mixing_score >= t['min_mixing']"
+
+error_handling:
+  "Error in RunHarmony: harmony not installed": "install.packages('harmony')"
+  "Error: group.by.vars column not found": "Ensure group.by.vars column exists in obj@meta.data"
+  "Error: RunPCA first": "Run RunPCA() (or SCTransform + RunPCA) before RunHarmony()"
+
+cognitive_layer:
+  purpose: >
+    Harmony performs batch correction by iteratively clustering cells in PCA space,
+    computing per-batch correction factors, and projecting the PCA embedding to
+    align batch-specific distributions. Unlike expression-level correction methods,
+    Harmony only modifies the PCA embedding (stored as 'harmony' reduction) —
+    the original count matrix is untouched. This corrected embedding is then used
+    for FindNeighbors and RunUMAP instead of 'pca'. Harmony is fast, memory-efficient,
+    and scales to millions of cells.
+  parameter_impact:
+    group.by.vars: "Column(s) encoding batch identity. Can include multiple sources of variation (e.g., donor + technology)."
+    theta: "Diversity penalty controlling how aggressively batches are mixed. Higher theta enforces stronger mixing; lower allows biological substructure to resist alignment."
+    lambda: "Ridge penalty on cluster centroids. Higher lambda makes correction more conservative, reducing over-correction risk."
+    sigma: "Width of soft-assignment kernel. Larger sigma gives softer cluster assignments, smoothing the correction landscape."
+
+parameter_science_guide:
+  theta:
+    under_corrected:
+      adjust: increase
+      delta: 0.5
+      causal_chain: "Higher diversity penalty forces Harmony to more aggressively redistribute cells across batches"
+      expected_effect: "Batches intermix more; batch-driven clusters dissolve"
+    over_corrected:
+      adjust: decrease
+      delta: 0.5
+      causal_chain: "Lower diversity penalty allows Harmony to preserve biological subpopulations that happen to be batch-enriched"
+      expected_effect: "Biological substructure preserved; some residual batch separation acceptable"
+  lambda:
+    over_corrected:
+      adjust: increase
+      delta: 0.5
+      causal_chain: "Higher ridge penalty constrains correction magnitude, reducing risk of merging distinct biological populations"
+      expected_effect: "More conservative correction; biological variation better preserved"
+    under_corrected:
+      adjust: decrease
+      delta: 0.3
+      causal_chain: "Lower ridge penalty allows stronger centroid shifts to align batch-specific clusters"
+      expected_effect: "Stronger batch correction; batches intermix more"
+  max.iter.harmony:
+    convergence_not_reached:
+      adjust: increase
+      delta: 5
+      causal_chain: "More iterations allow the algorithm to converge to the optimal embedding"
+      expected_effect: "Better batch correction; stable final embedding"

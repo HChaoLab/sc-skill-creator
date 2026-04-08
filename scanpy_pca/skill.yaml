@@ -1,0 +1,63 @@
+# PCA — Linear dimensionality reduction for single-cell data
+skill_id: scanpy_pca
+language: python
+package: scanpy
+
+required_inputs:
+  - input_data
+  - params_dict
+
+default_params:
+  n_comps: 50                  # int  number of PCs to compute
+  use_highly_variable: true    # bool  restrict to HVGs if available
+  svd_solver: arpack           # str  'arpack' | 'randomized' | 'auto' | 'lobpcg'
+  random_state: 42             # int  reproducibility seed
+
+output_objects:
+  - updated_adata
+
+accepted_input_types:
+  - AnnData
+  - h5ad
+
+output_format: same
+
+metrics_to_extract:
+  - n_pcs_computed
+  - variance_ratio_top10
+  - cumulative_variance_50pcs
+
+context_params:
+  - protocol
+
+success_thresholds: "variance_ratio_top10 >= t['min_var_ratio_top10']"
+
+error_handling:
+  "KeyError: highly_variable": "Run sc.pp.highly_variable_genes() before PCA, or set use_highly_variable=False"
+  MemoryError: "Reduce n_comps or use svd_solver='randomized' for large datasets"
+
+cognitive_layer:
+  purpose: >
+    Principal Component Analysis (PCA) performs linear dimensionality reduction by
+    identifying orthogonal axes (principal components) that capture the maximum
+    transcriptional variance across cells. It transforms the high-dimensional
+    gene expression space into a compact representation (typically 10–50 PCs) that
+    retains the major biological signals while discarding technical noise. PCA is
+    the foundational step before neighbor-graph construction, clustering, and UMAP.
+  parameter_impact:
+    n_comps: "Number of PCs to compute. More PCs capture more variance but increase noise and computation. Use ElbowPlot / knee detection to select the informative subset."
+    use_highly_variable: "Restricts PCA to HVGs, greatly reducing noise from invariant genes. Set False only if HVG selection has not been performed."
+    svd_solver: "'arpack' is exact and default; 'randomized' is faster for large datasets but approximate."
+
+parameter_science_guide:
+  n_comps:
+    insufficient_variance_captured:
+      adjust: increase
+      delta: 10
+      causal_chain: "More PCs capture variance from additional gene expression axes, including subtle variation from rare cell types"
+      expected_effect: "Higher cumulative variance; downstream clustering may recover rare populations"
+    noise_dominated:
+      adjust: decrease
+      delta: 10
+      causal_chain: "Fewer PCs restrict the neighbor graph to high-variance axes, reducing noise contribution"
+      expected_effect: "Cleaner clustering; fewer spurious clusters from noise dimensions"

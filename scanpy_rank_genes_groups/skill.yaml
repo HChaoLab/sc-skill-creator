@@ -1,0 +1,73 @@
+# rank_genes_groups — Differential expression / marker gene detection per cluster
+skill_id: scanpy_rank_genes_groups
+language: python
+package: scanpy
+
+required_inputs:
+  - input_data
+  - params_dict
+
+default_params:
+  groupby: leiden          # str  adata.obs column to group by (cluster label)
+  method: wilcoxon         # str  't-test' | 'wilcoxon' | 'logreg' | 't-test_overestim_var'
+  n_genes: 100             # int  number of top genes to return per group
+  use_raw: null            # bool or null  use adata.raw if available; null = auto-detect
+  pts: true                # bool  compute fraction of cells expressing each gene
+  key_added: rank_genes_groups  # str  key in adata.uns to store results
+
+output_objects:
+  - updated_adata
+
+accepted_input_types:
+  - AnnData
+  - h5ad
+
+output_format: same
+
+metrics_to_extract:
+  - n_groups
+  - mean_top1_score
+  - min_top1_score
+  - mean_genes_per_group
+
+context_params:
+  - protocol
+
+success_thresholds: "mean_top1_score >= t['min_top_score']"
+
+error_handling:
+  "KeyError: groupby column": "Ensure groupby column exists in adata.obs (run clustering first)"
+  "ValueError: groups": "Ensure at least 2 groups exist in the groupby column"
+
+cognitive_layer:
+  purpose: >
+    sc.tl.rank_genes_groups identifies marker genes that distinguish each cell
+    cluster from all others (one-vs-rest) or from a reference group. These markers
+    are essential for biological interpretation — annotating cell types, validating
+    clustering, and generating hypotheses about population-specific functions.
+    The Wilcoxon rank-sum test is the recommended default for scRNA-seq due to
+    its robustness to non-normality and zero inflation.
+  parameter_impact:
+    groupby: "The cluster column to test. Use leiden/louvain for standard analysis; custom columns for targeted comparisons."
+    method: "Statistical test. 'wilcoxon' is most robust for scRNA-seq; 't-test' is faster; 'logreg' gives multi-class logistic regression scores."
+    n_genes: "Number of top marker genes returned per cluster. More genes provide richer annotation; fewer focus on the strongest markers."
+    pts: "Compute fraction of cells expressing each gene. Essential for filtering lowly expressed markers."
+
+parameter_science_guide:
+  n_genes:
+    too_few_markers:
+      adjust: increase
+      delta: 50
+      causal_chain: "More genes returned per group provides more candidate markers for annotation"
+      expected_effect: "Richer marker lists; enables deeper biological interpretation"
+    low_specificity:
+      adjust: decrease
+      delta: 25
+      causal_chain: "Fewer genes returned focuses on the highest-scoring, most cluster-specific markers"
+      expected_effect: "Cleaner marker lists with higher specificity"
+  method:
+    high_pct_background:
+      adjust: increase
+      delta: 0
+      causal_chain: "Switch to 'wilcoxon' from 't-test' to handle zero-inflation and non-normality better"
+      expected_effect: "More accurate p-values; fewer false-positive markers in sparse data"

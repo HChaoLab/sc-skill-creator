@@ -1,0 +1,74 @@
+# UMAP — Non-linear 2D/3D embedding for single-cell visualization
+skill_id: scanpy_umap
+language: python
+package: scanpy
+
+required_inputs:
+  - input_data
+  - params_dict
+
+default_params:
+  min_dist: 0.5         # float  minimum distance between embedded points; controls cluster compactness
+  spread: 1.0           # float  effective scale of embedded points; controls inter-cluster spacing
+  n_components: 2       # int  embedding dimensions (2 or 3)
+  maxiter: null         # int or null  number of optimization iterations; null = auto
+  random_state: 42
+
+output_objects:
+  - updated_adata
+
+accepted_input_types:
+  - AnnData
+  - h5ad
+
+output_format: same
+
+metrics_to_extract:
+  - umap_range_x
+  - umap_range_y
+  - mean_nn_distance
+
+context_params:
+  - protocol
+
+success_thresholds: "umap_range_x >= t['min_range'] and umap_range_y >= t['min_range']"
+
+error_handling:
+  "KeyError: neighbors": "Run sc.pp.neighbors() before sc.tl.umap()"
+  "ValueError: n_components": "n_components must be 2 or 3"
+
+cognitive_layer:
+  purpose: >
+    UMAP (Uniform Manifold Approximation and Projection) produces a low-dimensional
+    (2D or 3D) embedding that preserves both local and global structure of the
+    transcriptional landscape. It is used exclusively for visualization — UMAP
+    coordinates do NOT affect clustering results. The embedding reveals cell type
+    relationships, gradients, and rare populations in an interpretable layout.
+  parameter_impact:
+    min_dist: "Controls how tightly cells are packed within clusters. Small min_dist → tight, compact clusters; large min_dist → diffuse, spread-out cells within clusters."
+    spread: "Controls the scale between clusters. Larger spread → more inter-cluster separation; smaller spread → clusters compressed together."
+    n_components: "2 for standard visualization; 3 for interactive 3D plots or trajectory analysis."
+
+parameter_science_guide:
+  min_dist:
+    overlapping_clusters:
+      adjust: decrease
+      delta: 0.1
+      causal_chain: "Smaller min_dist forces cells in the same local neighborhood to pack closer, separating clusters"
+      expected_effect: "Tighter, more distinct cluster boundaries in UMAP"
+    too_compressed:
+      adjust: increase
+      delta: 0.1
+      causal_chain: "Larger min_dist allows more spread within clusters, revealing internal structure"
+      expected_effect: "More diffuse clusters showing continuous gradients"
+  spread:
+    clusters_too_close:
+      adjust: increase
+      delta: 0.2
+      causal_chain: "Larger effective scale pushes cluster centroids farther apart in embedding space"
+      expected_effect: "Better visual separation between distinct cell populations"
+    clusters_too_spread:
+      adjust: decrease
+      delta: 0.2
+      causal_chain: "Smaller scale compresses the global layout"
+      expected_effect: "More compact overall embedding; clusters closer together"

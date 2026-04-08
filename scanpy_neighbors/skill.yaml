@@ -1,0 +1,76 @@
+# Neighbors — construct kNN graph for clustering and embedding
+skill_id: scanpy_neighbors
+language: python
+package: scanpy
+
+required_inputs:
+  - input_data
+  - params_dict
+
+default_params:
+  n_neighbors: 15      # int  k for kNN graph; controls local vs global structure
+  n_pcs: 40            # int  number of PCA dimensions to use
+  use_rep: X_pca       # str  representation to use; 'X_pca' | 'X_scVI' | 'X_harmony'
+  metric: euclidean    # str  distance metric
+  random_state: 42
+
+output_objects:
+  - updated_adata
+
+accepted_input_types:
+  - AnnData
+  - h5ad
+
+output_format: same
+
+metrics_to_extract:
+  - n_neighbors_used
+  - n_pcs_used
+  - mean_connectivities
+
+context_params:
+  - protocol
+
+success_thresholds: "n_neighbors_used >= t['min_neighbors']"
+
+error_handling:
+  "KeyError: X_pca": "Run sc.tl.pca() before sc.pp.neighbors()"
+  "KeyError: X_harmony": "Run harmony integration before using use_rep='X_harmony'"
+  MemoryError: "Reduce n_neighbors or n_pcs"
+
+cognitive_layer:
+  purpose: >
+    sc.pp.neighbors constructs a k-nearest neighbor (kNN) graph in the PCA (or
+    integration-corrected) embedding space. Each cell is connected to its k most
+    similar cells based on transcriptional distance. This graph is the foundation
+    for Leiden/Louvain clustering and UMAP visualization — the quality of neighbors
+    directly determines the quality of all downstream results.
+  parameter_impact:
+    n_neighbors: "Controls the size of local neighborhoods. Small k → sharp local structure, more distinct clusters; large k → smoother boundaries, fewer noise-driven clusters."
+    n_pcs: "Number of PCA dimensions used for distance calculation. Too few → miss structure; too many → noise dominates distances."
+    use_rep: "Which embedding to compute distances in. Use 'X_harmony' or 'X_scVI' after batch correction to build batch-corrected graph."
+    metric: "Distance function. 'euclidean' standard; 'cosine' better for high-dimensional sparse data."
+
+parameter_science_guide:
+  n_neighbors:
+    fragmented_clusters:
+      adjust: increase
+      delta: 5
+      causal_chain: "More neighbors smooth the graph, reducing isolated small clusters caused by local noise"
+      expected_effect: "Fewer, larger, more cohesive clusters"
+    over_merged_clusters:
+      adjust: decrease
+      delta: 5
+      causal_chain: "Fewer neighbors sharpen local neighborhood boundaries, separating closely related populations"
+      expected_effect: "More, smaller clusters with sharper boundaries"
+  n_pcs:
+    noisy_structure:
+      adjust: decrease
+      delta: 10
+      causal_chain: "Fewer PCs exclude noise-dominated dimensions from distance calculation"
+      expected_effect: "Cleaner neighborhood graph; biological structure emerges"
+    missing_rare_populations:
+      adjust: increase
+      delta: 10
+      causal_chain: "More PCs include variance from rare cell type-specific genes"
+      expected_effect: "Rare populations become distinguishable in the graph"
